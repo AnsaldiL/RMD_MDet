@@ -4,16 +4,163 @@ output: html_document
 date: "2023-10-16"
 ---
 
-# Définition du modèles 
-formule et autre 
+```{r init}
+rm(list=ls())
+library(deSolve)
+library(tidyverse)
+```
 
-## Création de la fonction du modèle
+
+# Définition du modèles 
+## Formalisme mathématique
+formule et autre 
 
 ## Définition des paramètres 
 
-## Simulation 
-graphes et tout 
+# Implémentation du modèle sous R
+## Création de la fonction
 
-# Influence de sigma sur la compétition 
+Voici les paramètres dont nous aurons besoin pour définir notre modèle.
+```{r param}
+# les valeurs des paramètres sont renseignées, elles pourront être réadaptées au besoin
 
-# Mutations 
+K0 <- 1
+lambda <- 1
+x0 <- 1/2
+xmin <- 0
+xmax <- 1
+N <- 8
+sigma <- 0.5
+r <- 0.5
+epsilon <- 10^(-6)
+
+#vecteur de paramètres
+param <- c(K0, lambda, x0, xmin, xmax, N, sigma,r, epsilon)
+```
+
+Nous allons procéder en deux étapes, tout d'abord créer la matrice qui sera utilisée pour le calcul de N à chaque pas de temps. Puis, l'équation différentielle sera définie dans une seconde fonction. Enfin, celle-ci sera résolue à l'aide de la fonction ode, du package deSolve.
+
+### Génération de la matrice
+
+```{r matriceM}
+matriceM <- function (param){
+  #paramètres
+  K0 <- param[1]
+  lambda <- param[2]
+  x0 <- param[3]
+  xmin <- param[4]
+  xmax <- param[5]
+  N <- param[6]
+  sigma <- param[7]
+  r <- param[8]
+  epsilon <- param[9]
+  
+  K <- c()
+  
+  # création des N valeurs de trait phénotypiques
+  X = seq(xmin, xmax, length.out = N)
+
+  
+  for (x in X){
+    K <- c(K, max((K0 -lambda*(x-x0)^2), 0+epsilon)) # Calcul du K pour chaque valeur de trait.
+    #Afin de ne pas obtenir de valeur négative, le maximum entre 0 et la valeur de K est retourné. un epsilon est ajouté au 0 pour pouvoir inverser K par la suite.
+  }
+  K <- K^(-1) #inversion de K
+  B <- matrix(data = K, ncol=N, nrow=N) #les valeurs de K^(-1) sont ordonnées dans une matrice
+  B <- t(B) # Transposons B
+  
+  D1 <- matrix(data=X, nrow= N, ncol = N, byrow= TRUE)
+  D2 <- matrix(data=X, nrow= N, ncol = N, byrow= FALSE)
+  C <- D2 - D1 # les valeurs des traits sont ordonnées par ligne et par colonne dans deux matrices et la différence est calculée
+  
+  A <- exp(-(C^2)/(2*sigma^2)) # application de la fonction
+  
+  M <- A*B #produit matriciel entre la matrice des K^(-1) et celle des traits
+  
+  return(M)
+}
+```
+
+Définition de l'éqution différentielle 
+```{r EDO}
+EDO_LK <- function(t, y, paraM){
+  # paramètres
+  r <- paraM[[1]][8]
+  M <- paraM[[2]]
+
+  dndt <- r*y*(1-y%*%M) # Equation différentielle 
+    
+  return(list(dndt))
+  }
+```
+
+## Simulations
+
+Pour simuler le comportement du modèle au cours du temps, nous avons besoin de résoudre cette équation différentielle.
+
+### Résolution de l'équation différentielle
+```{r resolEDO}
+MatM <- matriceM(param)
+paraM <- list(param, MatM) #passage de M en paramètre pour qu'elle soit un input de EDO_LK
+
+# paramètres nécessaires à la résolution de l'équation différentielle
+temps <- seq(0,10000,1)
+nbarre <- rep(K0/N, N)
+
+solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
+```
+
+L'équation différentielle ainsi définie est résolue par la fonction ode, le résultat, pour chaque pas de temps, est stocké dans la matrice solution.
+
+### Evolution de la proportion du trait en fonction du temps
+
+--> changer nom axes, mettre titre, changer nom légende et labels légende
+```{r graphN}
+solution %>%
+  as_tibble() %>%
+  mutate_all(as.numeric) %>%
+  pivot_longer(-time, names_to = "variable", values_to = "value") %>%
+  ggplot() +
+  aes(x = time, y = value, color = variable, xlab = "temps évolutif", ylab = "proportion du phénotype dans la population") +
+  geom_line()
+```
+
+La simulation est réalisée pour 8 traits phénotypiques initiaux. 
+Nous constatons une symétrie entre les traits qui distribués de façon symétrique de part et d'autre de la cloche de K représentée ci-dessous.
+
+```{r K}
+K <- c()
+X < - seq(xmin, xmax, length.out = N)
+for (x in X){
+    K <- c(K, max((K0 -lambda*(x-x0)^2), 0+epsilon))
+}
+
+plot(x=X, y=K, type='l', col = "orange2", xlab= "Valeur du trait", main = "K en fonction de la valeur du trait")
+```
+
+Ainsi, les valeurs 0.2 et 0.8 connaissent une même valeur de K et ont le même écart entre leur valeur, au signe prés. Le signe est ensuite gommé car la différence est mise au carrée (matrice A dans la fonction matriceM). C'est pourquoi leur comportement est identique. 
+
+Cette simulation permet la fixation majoritaire de deux traits (courbe violette), quatre autres disparaissent et deux derniers phénotype sont fixés mais environ 7 fois moins présents que le phénotype majoritaire.
+
+### Valeur des traits fixé à la fin du temps évolutif
+
+A la fin de la simulation, on s'interesse à savoir quels sont les traits qui ont été fixé et ceux qui ont disparus. Pour cela, on utilise le résultat au temps final de l'équation différentielle. Il s'agit de seuiller sur la proportion du trait puis de représenté les seuls phénotypes ayant été conservés. 
+
+```{r graphFixation}
+
+etatfinal = solution[nrow(solution),2:ncol(solution)] #solution de l'équation différentielle au temps final
+X = seq(xmin, xmax, length.out = N)
+
+plot(NULL, ylim = c(0, 100), xlim= c(xmin, xmax), xlab="valeur du trait", ylab="temps", type='l', main ="Valeur des traits fixés à la fin du temps évolutif")
+for (rgtrait in 1:length(etatfinal)){
+  if (etatfinal[rgtrait] > 0.001){ #seuil
+    abline(v = X[rgtrait], col='green3')
+  }
+}
+```
+
+On retrouve les quatres traits qui ont été fixés.
+
+# Aprofondissement de l'étude
+## Influence de sigma sur la compétition 
+## Introduction de Mutations et fixation des traits
