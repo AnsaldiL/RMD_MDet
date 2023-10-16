@@ -1,0 +1,19 @@
+---
+title: "Rendu MDET"
+output: html_document
+date: "2023-10-16"
+---
+
+# Définition du modèles 
+formule et autre 
+
+## Création de la fonction du modèle
+
+## Définition des paramètres 
+
+## Simulation 
+graphes et tout 
+
+# Influence de sigma sur la compétition 
+
+# Mutations 
