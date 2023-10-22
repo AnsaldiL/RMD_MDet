@@ -133,7 +133,7 @@ A = matrix(NA, nrow = length(X), ncol = length(X))
 for(i in 1:length(X)){
   for(j in 1:length(X)){
     K[i,j] =  fonc.K(x = X[j],K0 = K0, lambda = lambda, x0 = x0)
-    A[i,j] = fonc.a(x = X[i], y = X[j], simga = sigma)
+    A[i,j] = fonc.a(x = X[i], y = X[j], sigma = sigma)
   }
 }
 
@@ -251,7 +251,7 @@ A = matrix(NA, nrow = length(X), ncol = length(X))
 for(i in 1:length(X)){
   for(j in 1:length(X)){
     K[i,j] =  fonc.K(x = X[j],K0 = K0, lambda = lambda, x0 = x0)
-    A[i,j] = fonc.a(x = X[i], y = X[j], simga = sigma)
+    A[i,j] = fonc.a(x = X[i], y = X[j], sigma = sigma)
   }
 }
 
