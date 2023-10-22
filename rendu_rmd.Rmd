@@ -75,8 +75,8 @@ $$\dfrac{dN}{dt} = r*N_0*(1-N_0*M)$$ Avec :
 fonc.K = function(x, K0 = K0, lambda = lambda, x0 = x0){return(
   max(0, 1/(K0-lambda*(x - x0)^2)))}  #Afin de ne pas obtenir de valeur négative, le maximum entre 0 et la valeur de K est retourné. 
 
-fonc.a = function(x, y, simga = sigma){
-  return(exp(-(x-y)**2/2*(simga^2)))
+fonc.a = function(x, y, sigma = sigma){
+  return(exp(-(x-y)**2/2*(sigma^2)))
 }
 
 EDO_LK <- function(t, y, paraM){
@@ -89,6 +89,7 @@ EDO_LK <- function(t, y, paraM){
   return(list(dndt))
   })
 }
+
 
 ```
 
@@ -225,52 +226,75 @@ intervient dans le calcul de compétition interspécifique entre deux
 traits tel que :
 
 $$
-a(x_i,x_j) = e^{-0.5(x_i-x_j)^2/\sigma^2_a}
+a(x_i,x_j) = e^{-0.5\dfrac{(x_i-x_j)^2}{\sigma^2_a}}
 $$
 
 On sait déjà que l'intensité de la compétition va être d'autant plus
 grande que la distance entre les trait ( $x_i-x_j$ ) est petite. On
-cherche maintenant à déterminer, pour deux traitsdonnés comment la
-valeur de $\sigma$ influence l'intensité de la compétion
-interspécifique.
+cherche maintenant à déterminer, pour 8 traits donnés comment la valeur
+de $\sigma$ influence l'intensité de la compétion interspécifique.
 
 On commence par résoudre l'EDO pour différentes valeurs de $\sigma$ :
 
-```{r}
-val_sig = seq (0.1,20,0.1)
-selection <- rep(NULL, length( seq (0.5,20,0.5)))
+```{r, include=FALSE}
+val_sig = seq (0.1,20,0.5) # valeur de sigma testées
+
+selection <- rep(NULL, length( seq (0.5,20,0.5))) #vecteur du nombre de traits sélectionnés 
 
 for (i in val_sig){
-# valeurs initiales
-K0 <- 1
-lambda <- 1
-x0 <- 1
-xmin <- 0
-xmax <- 1
-N <- 10
-sigma <- i
-r <- 1
-epsilon <- 10^(-6)
+sigma = i 
 
+#Création des matrice K et A vides 
+K = matrix(NA, nrow = length(X), ncol = length(X))
+A = matrix(NA, nrow = length(X), ncol = length(X))
+
+for(i in 1:length(X)){
+  for(j in 1:length(X)){
+    K[i,j] =  fonc.K(x = X[j],K0 = K0, lambda = lambda, x0 = x0)
+    A[i,j] = fonc.a(x = X[i], y = X[j], simga = sigma)
+  }
+}
+
+#listes de paramètres
+paraM <- list(r = r, K = K, A = A) 
+
+# paramètres nécessaires à la résolution de l'équation différentielle
 temps <- seq(0,100,1)
-nbarre0 <- rep(K0/N, N)
 
-#vecteur de paramètres
-param <- c(K0, lambda, x0, xmin, xmax, N, sigma,r, epsilon)
-M <- matriceM(param)
-param <- list(param, M)
-
-solution <- ode(y = nbarre0, times = temps, func = EDO_LK, parms = param)
+solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
 
 # on récupère le nombre de phénotype sélectionné 
 selection <- c(selection, sum(solution[nrow(solution),2:ncol(solution)]>0.1))
 
 
 }
+```
 
-selection
+Représentation graphique
+
+```{r}
+sel_sig = data.frame(sigma = val_sig, selection = selection)
+
+ggplot(data = sel_sig)+
+  geom_point(aes(x = sigma, y = selection))+
+  main_theme
+```
+
+Pour 8 traits données il semble que plus $\sigma$ augmente plus la
+compétition diminue donc le nombre de traits sélectionnés augmente
+jusqu'à atteintre le maximum de trait sélectionné (= le nombre de trait
+de départ).
+
+On faire la même observation en repésentant graphiquement la fonction de compétition $a(x_i,x_j)$ :
+```{r}
+X = seq(from = 0, to = 1, length.out = 50 )
+
+plot(X,fonc.a(x = X, y = 0.5, sigma = 0.2), type = "l", col =  "#D55E00", ylab = ("Fonction de compétition"))
+lines(X,fonc.a(x = X, y = 0.5, sigma = 0.4), type = "l", col = "#F0E442")
+lines(X,fonc.a(x = X, y = 0.5, sigma = 0.8), type = "l", col = "#CC79A7")
 
 ```
+On peut voir que plus $\sigma$ est petit plus la fonction de compétition est étendu , donc plus la compétition est importante pour un interval de donné élevé.
 
 ## Introduction de Mutations et fixation des traits
 
