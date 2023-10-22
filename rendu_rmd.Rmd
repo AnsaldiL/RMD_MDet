@@ -15,16 +15,13 @@ library(tidyverse)
 
 ```{r param graph}
 main_theme = theme_bw()+
-  theme(line = element_blank(), 
-        axis.line = element_line(colour = "black"),
-        panel.border = element_blank(),
-        axis.ticks =  element_line(colour = "black"),
-        axis.text.x = element_text(colour = "black", size=22),
-        axis.text.y = element_text(colour = "black", size=22),
-        legend.title = element_text(colour = "black", size=20),
+  theme(axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(colour = "black", size=13),
+        axis.text.y = element_text(colour = "black", size=13),
+        legend.title = element_text(colour = "black", size=13),
         legend.title.align=0.5,
-        legend.text = element_text(colour = "black", size=18),
-        axis.title=element_text(size=28))
+        legend.text = element_text(colour = "black", size=12),
+        axis.title=element_text(size=20))
 
 ```
 
@@ -71,8 +68,7 @@ $$\dfrac{dN}{dt} = r*N_0*(1-N_0*M)$$ Avec :
     \dfrac{a_{11}}{K_1} & \cdots & \dfrac{a_{N1}}{K_1}\\
     \vdots & \space & \vdots \\ \dfrac{a_{1N}}{K_N} & \cdots & \dfrac{a_{NN}}{K_N}
     \end{pmatrix}   $$
-    
-    
+
 ## Création des fonctions nécessaires à la simulation
 
 ```{r fonctions}
@@ -86,7 +82,7 @@ fonc.a = function(x, y, simga = sigma){
 EDO_LK <- function(t, y, paraM){
   with(as.list(paraM), { # permet d'éviter de lister les paramètres 
 
-   M = A * K
+  M = A * K
 
   dndt <- r*y*(1-y%*%M) # Equation différentielle 
   
@@ -103,10 +99,10 @@ Voici les paramètres dont nous aurons besoin pour définir notre modèle.
 ```{r param}
 # les valeurs des paramètres sont renseignées, elles pourront être réadaptées au besoin
 
-N <- 8 #nombre de traits
+N <- 10 #nombre de traits
 
 # Pour le calcul de la fonction de compétition (a)
-sigma <- 0.5
+sigma <- 0.2
 
 # Pour le calcul de la fonction de fitness (K)
 K0 <- 1
@@ -121,7 +117,9 @@ xmax <- 1
 r <- 0.5
 
 ```
-Calcul de K et a pour chaque valeur de traits phénotypique : 
+
+Calcul de K et a pour chaque valeur de traits phénotypique :
+
 ```{r}
 
 # création des N valeurs de trait phénotypiques
@@ -142,7 +140,6 @@ K = K^(-1) #inversion de K
 
 ```
 
-
 ## Simulations
 
 Pour simuler le comportement du modèle au cours du temps, nous avons
@@ -154,7 +151,7 @@ besoin de résoudre cette équation différentielle.
 paraM <- list(r = r, K = K, A=A) #passage de M en paramètre pour qu'elle soit un input de EDO_LK
 
 # paramètres nécessaires à la résolution de l'équation différentielle
-temps <- seq(0,100,1)
+temps <- seq(0,1000,1)
 nbarre <- rep(K0/N, N)
 
 solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
@@ -166,41 +163,36 @@ solution.
 
 ### Evolution de la proportion du trait en fonction du temps
 
---\> changer nom axes, mettre titre, changer nom légende et labels
-légende
-
 ```{r graphN}
 solution %>%
   as_tibble() %>%
   mutate_all(as.numeric) %>%
-  pivot_longer(-time, names_to = "variable", values_to = "value") %>%
+  pivot_longer(-time, names_to = "Phénotype", values_to = "value") %>%
   ggplot() +
-  aes(x = time, y = value, color = variable, xlab = "temps évolutif", ylab = "proportion du phénotype dans la population") +
-  geom_line()
+  geom_line(aes(x = time, y = value, color = Phénotype))+
+  xlab ("Temps évolutif")+
+  ylab ("Proportion du phénotype")+
+  scale_colour_manual(values=c("#000000", "#E69F00", "#009E73",
+                               "#0072B2", "#D55E00", "#F0E442", "#CC79A7", "purple"))+
+  main_theme
 ```
 
 La simulation est réalisée pour 8 traits phénotypiques initiaux. Nous
 constatons une symétrie entre les traits qui distribués de façon
-symétrique de part et d'autre de la cloche de K représentée ci-dessous.
+symétrique de part et d'autre de la cloche de K représentée
+ci-dessous.Cette simulation permet la fixation majoritaire de deux
+traits (courbe violette), quatre autres disparaissent et deux derniers
+phénotype sont fixés mais environ 7 fois moins présents que le phénotype
+majoritaire.
 
 ```{r K}
-K <- c()
-X <- seq(xmin, xmax, length.out = N)
-for (x in X){
-    K <- c(K, max((K0 -lambda*(x-x0)^2), 0+epsilon))
-}
-
-plot(x=X, y=K, type='l', col = "orange2", xlab= "Valeur du trait", main = "K en fonction de la valeur du trait")
+plot(x=X, y=K[1,], type='l', col = "orange2", xlab= "Valeur du trait", ylab = "K", main = "K en fonction de la valeur du trait")
 ```
 
 Ainsi, les valeurs 0.2 et 0.8 connaissent une même valeur de K et ont le
 même écart entre leur valeur, au signe prés. Le signe est ensuite gommé
-car la différence est mise au carrée (matrice A dans la fonction
-matriceM). C'est pourquoi leur comportement est identique.
-
-Cette simulation permet la fixation majoritaire de deux traits (courbe
-violette), quatre autres disparaissent et deux derniers phénotype sont
-fixés mais environ 7 fois moins présents que le phénotype majoritaire.
+car la différence est mise au carrée . C'est pourquoi leur comportement
+est identique.
 
 ### Valeur des traits fixé à la fin du temps évolutif
 
@@ -213,11 +205,10 @@ phénotypes ayant été conservés.
 ```{r graphFixation}
 
 etatfinal = solution[nrow(solution),2:ncol(solution)] #solution de l'équation différentielle au temps final
-X = seq(xmin, xmax, length.out = N)
 
 plot(NULL, ylim = c(0, 100), xlim= c(xmin, xmax), xlab="valeur du trait", ylab="temps", type='l', main ="Valeur des traits fixés à la fin du temps évolutif")
 for (rgtrait in 1:length(etatfinal)){
-  if (etatfinal[rgtrait] > 0.001){ #seuil
+  if (etatfinal[rgtrait] > 0.1){ #seuil
     abline(v = X[rgtrait], col='green3')
   }
 }
@@ -251,10 +242,6 @@ d'individu que de phénotypes possible, voici-ce que l'on observe.
 sigma = 0.5
 N <- 20 #nombre de traits
 
-param <- c(K0, lambda, x0, xmin, xmax, N, sigma, r, epsilon)
-MatM <- matriceM(param)
-param <- list(param, MatM)
-
 M <- 100 #temps évolutif répétition du temps t. 
 p <- 0.1 #probanilité de mutation
 X <- seq(xmin, xmax, length.out = N) #valeur des traits
@@ -265,7 +252,7 @@ nTmat = matrix(nrow=M, ncol=length(X))
 
 # --> mettre dans une fonction ?
 for(m in 1:M){
-  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = param)
+  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
   nT = solution[nrow(solution),2:ncol(solution)]
   for (rgtrait in 1:length(nT)){
     if (nT[rgtrait] > 0.01){
