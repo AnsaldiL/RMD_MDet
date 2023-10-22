@@ -2,9 +2,12 @@
 title: "Rendu MDET"
 output: html_document
 date: "2023-10-16"
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
-```{r init}
+```{r init, include=FALSE}
 rm(list=ls())
 library(deSolve)
 library(tidyverse)
@@ -25,42 +28,92 @@ main_theme = theme_bw()+
 
 ```
 
+# Définition du modèles
 
-# Définition du modèles 
 ## Formalisme mathématique
+
 Modèle de compétition Lotka-Volterra :
 
-$$\dfrac{dn_i}{dt}=rn_i(1-\dfrac{\sum_{j=1}^Na(x_i,x_j)n_j}{K(x_i)}) $$ 
+$$\dfrac{dn_i}{dt}=rn_i(1-\dfrac{\sum_{j=1}^Na(x_i,x_j)n_j}{K(x_i)}) $$
 $$i = 1,2,...,N$$
 
-## Définition des paramètres 
+## Définition des paramètres
+
+Avec :
+
+-   $i$ le nombre de phénotype *#pas sûr à vérifier*
+
+-   $r$ le taux de développement de ce phénotype *#normalement c'est
+    taux de croissance pour pop pas sûr du terme pour un phénotype du
+    coup*
+
+-   $a(x_i,x_j)$ la fonction de compétition interspécifique entre un
+    phénotype $x_i$ et un phénotype $x_j$
+
+    L'intensité de la compétition ne dépend que de la distance entre les
+    deux phénotype d :\$ x_i-x_j\$. Si d augmente la compétition
+    augmente. Donc plus les traits sont proche plus la compétition est
+    importante
+
+-   $K(x_i)$ la fitness d'un individu qui porte le phénotype $x_i$
 
 # Implémentation du modèle sous R
-## Création de la fonction
+
+Sous R, pour des raisons d'optimisation, la proportion de chaque
+phénotypes sera calculé avec la formule suivente :
+$$\dfrac{dN}{dt} = r*N_0*(1-N_0*M)$$ Avec :
+
+-   $N_0$ : les valeurs initiales de proportions des phénotypes
+
+-   $M$ : la matrice qui regroupe les valeurs des fonctions de
+    compétitions $a$ entre chaque phénotypes et de fitness $K$ égal à :
+    $$ M_{ij} = \begin{pmatrix}
+    \dfrac{a_{11}}{K_1} & \cdots & \dfrac{a_{N1}}{K_1}\\
+    \vdots & \space & \vdots \\ \dfrac{a_{1N}}{K_N} & \cdots & \dfrac{a_{NN}}{K_N}
+    \end{pmatrix}   $$
+
+## Définition des valeurs des parmètres
 
 Voici les paramètres dont nous aurons besoin pour définir notre modèle.
+
 ```{r param}
 # les valeurs des paramètres sont renseignées, elles pourront être réadaptées au besoin
 
+# Pour le calcul de la fonction de compétition
+sigma <- 0.5
+
+# Pour le calcul de la fonction de fitness
 K0 <- 1
 lambda <- 1
+epsilon <- 10^(-6)
+
+#Pour le calcul de la proportion d'un phénotype x donné (= résolution de l'EDO)
 x0 <- 1/2
 xmin <- 0
 xmax <- 1
 N <- 8
-sigma <- 0.5
+
 r <- 0.5
-epsilon <- 10^(-6)
 
 #vecteur de paramètres
 param <- c(K0, lambda, x0, xmin, xmax, N, sigma,r, epsilon)
 ```
 
-Nous allons procéder en deux étapes, tout d'abord créer la matrice qui sera utilisée pour le calcul de N à chaque pas de temps. Puis, l'équation différentielle sera définie dans une seconde fonction. Enfin, celle-ci sera résolue à l'aide de la fonction ode, du package deSolve.
+Nous allons procéder en deux étapes, tout d'abord créer la matrice qui
+sera utilisée pour le calcul de N à chaque pas de temps. Puis,
+l'équation différentielle sera définie dans une seconde fonction. Enfin,
+celle-ci sera résolue à l'aide de la fonction ode, du package deSolve.
 
-### Génération de la matrice
+## Création des fonctions
 
 ```{r matriceM}
+fonc.K = function(x, K0, lambda, x0){return(
+  max(0, 1/(K0-lambda*(x - x0)^2)))}
+
+fonc.a = function(x, y, simga){
+  return(exp(-(x-y)**2/2*(simga^2)))
+}
+
 matriceM <- function (param){
   #paramètres
   K0 <- param[1]
@@ -99,7 +152,8 @@ matriceM <- function (param){
 }
 ```
 
-Définition de l'éqution différentielle 
+Définition de l'éqution différentielle
+
 ```{r EDO}
 EDO_LK <- function(t, y, paraM){
   # paramètres
@@ -114,9 +168,11 @@ EDO_LK <- function(t, y, paraM){
 
 ## Simulations
 
-Pour simuler le comportement du modèle au cours du temps, nous avons besoin de résoudre cette équation différentielle.
+Pour simuler le comportement du modèle au cours du temps, nous avons
+besoin de résoudre cette équation différentielle.
 
 ### Résolution de l'équation différentielle
+
 ```{r resolEDO}
 MatM <- matriceM(param)
 paraM <- list(param, MatM) #passage de M en paramètre pour qu'elle soit un input de EDO_LK
@@ -128,11 +184,15 @@ nbarre <- rep(K0/N, N)
 solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
 ```
 
-L'équation différentielle ainsi définie est résolue par la fonction ode, le résultat, pour chaque pas de temps, est stocké dans la matrice solution.
+L'équation différentielle ainsi définie est résolue par la fonction ode,
+le résultat, pour chaque pas de temps, est stocké dans la matrice
+solution.
 
 ### Evolution de la proportion du trait en fonction du temps
 
---> changer nom axes, mettre titre, changer nom légende et labels légende
+--\> changer nom axes, mettre titre, changer nom légende et labels
+légende
+
 ```{r graphN}
 solution %>%
   as_tibble() %>%
@@ -143,8 +203,9 @@ solution %>%
   geom_line()
 ```
 
-La simulation est réalisée pour 8 traits phénotypiques initiaux. 
-Nous constatons une symétrie entre les traits qui distribués de façon symétrique de part et d'autre de la cloche de K représentée ci-dessous.
+La simulation est réalisée pour 8 traits phénotypiques initiaux. Nous
+constatons une symétrie entre les traits qui distribués de façon
+symétrique de part et d'autre de la cloche de K représentée ci-dessous.
 
 ```{r K}
 K <- c()
@@ -156,13 +217,22 @@ for (x in X){
 plot(x=X, y=K, type='l', col = "orange2", xlab= "Valeur du trait", main = "K en fonction de la valeur du trait")
 ```
 
-Ainsi, les valeurs 0.2 et 0.8 connaissent une même valeur de K et ont le même écart entre leur valeur, au signe prés. Le signe est ensuite gommé car la différence est mise au carrée (matrice A dans la fonction matriceM). C'est pourquoi leur comportement est identique. 
+Ainsi, les valeurs 0.2 et 0.8 connaissent une même valeur de K et ont le
+même écart entre leur valeur, au signe prés. Le signe est ensuite gommé
+car la différence est mise au carrée (matrice A dans la fonction
+matriceM). C'est pourquoi leur comportement est identique.
 
-Cette simulation permet la fixation majoritaire de deux traits (courbe violette), quatre autres disparaissent et deux derniers phénotype sont fixés mais environ 7 fois moins présents que le phénotype majoritaire.
+Cette simulation permet la fixation majoritaire de deux traits (courbe
+violette), quatre autres disparaissent et deux derniers phénotype sont
+fixés mais environ 7 fois moins présents que le phénotype majoritaire.
 
 ### Valeur des traits fixé à la fin du temps évolutif
 
-A la fin de la simulation, on s'interesse à savoir quels sont les traits qui ont été fixé et ceux qui ont disparus. Pour cela, on utilise le résultat au temps final de l'équation différentielle. Il s'agit de seuiller sur la proportion du trait puis de représenté les seuls phénotypes ayant été conservés. 
+A la fin de la simulation, on s'interesse à savoir quels sont les traits
+qui ont été fixé et ceux qui ont disparus. Pour cela, on utilise le
+résultat au temps final de l'équation différentielle. Il s'agit de
+seuiller sur la proportion du trait puis de représenté les seuls
+phénotypes ayant été conservés.
 
 ```{r graphFixation}
 
@@ -180,16 +250,25 @@ for (rgtrait in 1:length(etatfinal)){
 On retrouve les quatres traits qui ont été fixés.
 
 # Aprofondissement de l'étude
-## Influence de sigma sur la compétition 
 
+## Influence de sigma sur la compétition
 
 ## Introduction de Mutations et fixation des traits
 
-Une mutation est introduite dans le modèle. Une fraction de la population va être soumise à cette légère modification de la valeur du trait, avec une probabilité p. Nous avons choisi de ne faire que des mutations "à droite", c'est à dire qu'il n'y a pas de retour en arrière possible, la valeur du trait mute toujours en augmentant. Il s'agit d'une hypothèse forte sans réelle valeur biologique, en effet, l'évolution peut tout à fait faire disparaître une mutation apparue préalablement. Nous nous sommes arrêtées sur cette hypothèse par mesure de simplicité.
+Une mutation est introduite dans le modèle. Une fraction de la
+population va être soumise à cette légère modification de la valeur du
+trait, avec une probabilité p. Nous avons choisi de ne faire que des
+mutations "à droite", c'est à dire qu'il n'y a pas de retour en arrière
+possible, la valeur du trait mute toujours en augmentant. Il s'agit
+d'une hypothèse forte sans réelle valeur biologique, en effet,
+l'évolution peut tout à fait faire disparaître une mutation apparue
+préalablement. Nous nous sommes arrêtées sur cette hypothèse par mesure
+de simplicité.
 
 ### Pour tous les traits d'effectifs initiaux équivalent :
 
-En concervant l'hypothèse qu'à l'origine, la population comporte autant d'individu que de phénotypes possible, voici-ce que l'on observe.
+En concervant l'hypothèse qu'à l'origine, la population comporte autant
+d'individu que de phénotypes possible, voici-ce que l'on observe.
 
 ```{r}
 
@@ -261,12 +340,17 @@ ggplot(nTmat_long)+
   main_theme
 ```
 
-Comme précédemment, les phénotypes qui perdurent sont ceux qui présentent un bon compromis entre valeur selective et compétition.
+Comme précédemment, les phénotypes qui perdurent sont ceux qui
+présentent un bon compromis entre valeur selective et compétition.
 
 ### Lorsque le trait initial est le trait pour de valeur selective inoptimale :
 
-Dans ce cas-ci, afin de de mieux percevoir l'effet des mutations sur la valeur du phénotype,  nous fixons la population initiale au phénotype avec la plus mauvaise valeur sélective. Il s'agit d'observer la fixation du trait de valeur sélective maximle au cours du temps évolutif.
-Nous choisissons sigma = 2, afin d'appliquer une force pression de compétition.
+Dans ce cas-ci, afin de de mieux percevoir l'effet des mutations sur la
+valeur du phénotype, nous fixons la population initiale au phénotype
+avec la plus mauvaise valeur sélective. Il s'agit d'observer la fixation
+du trait de valeur sélective maximle au cours du temps évolutif. Nous
+choisissons sigma = 2, afin d'appliquer une force pression de
+compétition.
 
 ```{r}
 sigma = 2
@@ -340,11 +424,13 @@ ggplot(nTmat_long)+
   main_theme
 ```
 
-On voit clairement que le phénotype optimal, de valeur 0.5 est sélectionné au bout de 25*t avec t = 10,000. 
+On voit clairement que le phénotype optimal, de valeur 0.5 est
+sélectionné au bout de 25\*t avec t = 10,000.
 
 ### Influence de la valeur de sigma
 
-Lorsque l'on mofifie cette valeur de sigma pour lever la pression de compétition, on constate la coexistence de deux phénotytes.
+Lorsque l'on mofifie cette valeur de sigma pour lever la pression de
+compétition, on constate la coexistence de deux phénotytes.
 
 ```{r}
 
@@ -419,4 +505,7 @@ ggplot(nTmat_long)+
   main_theme
 ```
 
-Dans ce cas-ci, deux phénotypes coexistent. Aucun des deux n'est optimal mais il permettent un compromis entre pression de compétition et valeur sélective. Sans être optimaux, ces phénotypes sont viables et autorisent les individus à coexister.
+Dans ce cas-ci, deux phénotypes coexistent. Aucun des deux n'est optimal
+mais il permettent un compromis entre pression de compétition et valeur
+sélective. Sans être optimaux, ces phénotypes sont viables et autorisent
+les individus à coexister.
