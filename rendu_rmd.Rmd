@@ -99,7 +99,7 @@ Voici les paramètres dont nous aurons besoin pour définir notre modèle.
 ```{r param}
 # les valeurs des paramètres sont renseignées, elles pourront être réadaptées au besoin
 
-N <- 10 #nombre de traits
+N <- 8 #nombre de traits
 
 # Pour le calcul de la fonction de compétition (a)
 sigma <- 0.2
@@ -136,7 +136,6 @@ for(i in 1:length(X)){
   }
 }
 
-K = K^(-1) #inversion de K
 
 ```
 
@@ -151,7 +150,7 @@ besoin de résoudre cette équation différentielle.
 paraM <- list(r = r, K = K, A=A) #passage de M en paramètre pour qu'elle soit un input de EDO_LK
 
 # paramètres nécessaires à la résolution de l'équation différentielle
-temps <- seq(0,1000,1)
+temps <- seq(0,100,1)
 nbarre <- rep(K0/N, N)
 
 solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
@@ -186,7 +185,7 @@ phénotype sont fixés mais environ 7 fois moins présents que le phénotype
 majoritaire.
 
 ```{r K}
-plot(x=X, y=K[1,], type='l', col = "orange2", xlab= "Valeur du trait", ylab = "K", main = "K en fonction de la valeur du trait")
+plot(x=X, y=K[1,]^(-1), type='l', col = "orange2", xlab= "Valeur du trait", ylab = "K", main = "K en fonction de la valeur du trait")
 ```
 
 Ainsi, les valeurs 0.2 et 0.8 connaissent une même valeur de K et ont le
@@ -214,11 +213,64 @@ for (rgtrait in 1:length(etatfinal)){
 }
 ```
 
-On retrouve les quatres traits qui ont été fixés.
+On retrouve les deux traits qui ont été fixés.
 
 # Aprofondissement de l'étude
 
-## Influence de sigma sur la compétition
+## Analyse de sensibilité du paramètre $\sigma$
+
+On cherche à étudier l'influence de l'incertitude de $\sigma$ sur le
+nombre de traits phénotypique sélectionné. C'est un paramètre qui
+intervient dans le calcul de compétition interspécifique entre deux
+traits tel que :
+
+$$
+a(x_i,x_j) = e^{-0.5(x_i-x_j)^2/\sigma^2_a}
+$$
+
+On sait déjà que l'intensité de la compétition va être d'autant plus
+grande que la distance entre les trait ( $x_i-x_j$ ) est petite. On
+cherche maintenant à déterminer, pour deux traitsdonnés comment la
+valeur de $\sigma$ influence l'intensité de la compétion
+interspécifique.
+
+On commence par résoudre l'EDO pour différentes valeurs de $\sigma$ :
+
+```{r}
+val_sig = seq (0.1,20,0.1)
+selection <- rep(NULL, length( seq (0.5,20,0.5)))
+
+for (i in val_sig){
+# valeurs initiales
+K0 <- 1
+lambda <- 1
+x0 <- 1
+xmin <- 0
+xmax <- 1
+N <- 10
+sigma <- i
+r <- 1
+epsilon <- 10^(-6)
+
+temps <- seq(0,100,1)
+nbarre0 <- rep(K0/N, N)
+
+#vecteur de paramètres
+param <- c(K0, lambda, x0, xmin, xmax, N, sigma,r, epsilon)
+M <- matriceM(param)
+param <- list(param, M)
+
+solution <- ode(y = nbarre0, times = temps, func = EDO_LK, parms = param)
+
+# on récupère le nombre de phénotype sélectionné 
+selection <- c(selection, sum(solution[nrow(solution),2:ncol(solution)]>0.1))
+
+
+}
+
+selection
+
+```
 
 ## Introduction de Mutations et fixation des traits
 
