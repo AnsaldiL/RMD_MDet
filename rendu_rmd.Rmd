@@ -28,7 +28,10 @@ main_theme = theme_bw()+
 
 # Définition du modèles 
 ## Formalisme mathématique
-formule et autre 
+Modèle de compétition Lotka-Volterra :
+
+$$\dfrac{dn_i}{dt}=rn_i(1-\dfrac{\sum_{j=1}^Na(x_i,x_j)n_j}{K(x_i)}) $$ 
+$$i = 1,2,...,N$$
 
 ## Définition des paramètres 
 
