@@ -71,6 +71,30 @@ $$\dfrac{dN}{dt} = r*N_0*(1-N_0*M)$$ Avec :
     \dfrac{a_{11}}{K_1} & \cdots & \dfrac{a_{N1}}{K_1}\\
     \vdots & \space & \vdots \\ \dfrac{a_{1N}}{K_N} & \cdots & \dfrac{a_{NN}}{K_N}
     \end{pmatrix}   $$
+    
+    
+## Création des fonctions nécessaires à la simulation
+
+```{r fonctions}
+fonc.K = function(x, K0 = K0, lambda = lambda, x0 = x0){return(
+  max(0, 1/(K0-lambda*(x - x0)^2)))}  #Afin de ne pas obtenir de valeur négative, le maximum entre 0 et la valeur de K est retourné. 
+
+fonc.a = function(x, y, simga = sigma){
+  return(exp(-(x-y)**2/2*(simga^2)))
+}
+
+EDO_LK <- function(t, y, paraM){
+  with(as.list(paraM), { # permet d'éviter de lister les paramètres 
+
+   M = A * K
+
+  dndt <- r*y*(1-y%*%M) # Equation différentielle 
+  
+  return(list(dndt))
+  })
+}
+
+```
 
 ## Définition des valeurs des parmètres
 
@@ -79,92 +103,45 @@ Voici les paramètres dont nous aurons besoin pour définir notre modèle.
 ```{r param}
 # les valeurs des paramètres sont renseignées, elles pourront être réadaptées au besoin
 
-# Pour le calcul de la fonction de compétition
+N <- 8 #nombre de traits
+
+# Pour le calcul de la fonction de compétition (a)
 sigma <- 0.5
 
-# Pour le calcul de la fonction de fitness
+# Pour le calcul de la fonction de fitness (K)
 K0 <- 1
 lambda <- 1
-epsilon <- 10^(-6)
-
-#Pour le calcul de la proportion d'un phénotype x donné (= résolution de l'EDO)
 x0 <- 1/2
+
+# Pour le calcul de la valeur des trais phénotypique 
 xmin <- 0
 xmax <- 1
-N <- 8
 
+#Pour le calcul de la proportion d'un phénotype x donné (= résolution de l'EDO)
 r <- 0.5
 
-#vecteur de paramètres
-param <- c(K0, lambda, x0, xmin, xmax, N, sigma,r, epsilon)
 ```
+Calcul de K et a pour chaque valeur de traits phénotypique : 
+```{r}
 
-Nous allons procéder en deux étapes, tout d'abord créer la matrice qui
-sera utilisée pour le calcul de N à chaque pas de temps. Puis,
-l'équation différentielle sera définie dans une seconde fonction. Enfin,
-celle-ci sera résolue à l'aide de la fonction ode, du package deSolve.
+# création des N valeurs de trait phénotypiques
+X = seq(xmin, xmax, length.out = N)
 
-## Création des fonctions
+#Création des matrice K et A vides 
+K = matrix(NA, nrow = length(X), ncol = length(X))
+A = matrix(NA, nrow = length(X), ncol = length(X))
 
-```{r matriceM}
-fonc.K = function(x, K0, lambda, x0){return(
-  max(0, 1/(K0-lambda*(x - x0)^2)))}
-
-fonc.a = function(x, y, simga){
-  return(exp(-(x-y)**2/2*(simga^2)))
+for(i in 1:length(X)){
+  for(j in 1:length(X)){
+    K[i,j] =  fonc.K(x = X[j],K0 = K0, lambda = lambda, x0 = x0)
+    A[i,j] = fonc.a(x = X[i], y = X[j], simga = sigma)
+  }
 }
 
-matriceM <- function (param){
-  #paramètres
-  K0 <- param[1]
-  lambda <- param[2]
-  x0 <- param[3]
-  xmin <- param[4]
-  xmax <- param[5]
-  N <- param[6]
-  sigma <- param[7]
-  r <- param[8]
-  epsilon <- param[9]
-  
-  K <- c()
-  
-  # création des N valeurs de trait phénotypiques
-  X = seq(xmin, xmax, length.out = N)
+K = K^(-1) #inversion de K
 
-  
-  for (x in X){
-    K <- c(K, max((K0 -lambda*(x-x0)^2), 0+epsilon)) # Calcul du K pour chaque valeur de trait.
-    #Afin de ne pas obtenir de valeur négative, le maximum entre 0 et la valeur de K est retourné. un epsilon est ajouté au 0 pour pouvoir inverser K par la suite.
-  }
-  K <- K^(-1) #inversion de K
-  B <- matrix(data = K, ncol=N, nrow=N) #les valeurs de K^(-1) sont ordonnées dans une matrice
-  B <- t(B) # Transposons B
-  
-  D1 <- matrix(data=X, nrow= N, ncol = N, byrow= TRUE)
-  D2 <- matrix(data=X, nrow= N, ncol = N, byrow= FALSE)
-  C <- D2 - D1 # les valeurs des traits sont ordonnées par ligne et par colonne dans deux matrices et la différence est calculée
-  
-  A <- exp(-(C^2)/(2*sigma^2)) # application de la fonction
-  
-  M <- A*B #produit matriciel entre la matrice des K^(-1) et celle des traits
-  
-  return(M)
-}
 ```
 
-Définition de l'éqution différentielle
-
-```{r EDO}
-EDO_LK <- function(t, y, paraM){
-  # paramètres
-  r <- paraM[[1]][8]
-  M <- paraM[[2]]
-
-  dndt <- r*y*(1-y%*%M) # Equation différentielle 
-    
-  return(list(dndt))
-  }
-```
 
 ## Simulations
 
@@ -173,12 +150,11 @@ besoin de résoudre cette équation différentielle.
 
 ### Résolution de l'équation différentielle
 
-```{r resolEDO}
-MatM <- matriceM(param)
-paraM <- list(param, MatM) #passage de M en paramètre pour qu'elle soit un input de EDO_LK
+```{r resolEDO, include= FALSE}
+paraM <- list(r = r, K = K, A=A) #passage de M en paramètre pour qu'elle soit un input de EDO_LK
 
 # paramètres nécessaires à la résolution de l'équation différentielle
-temps <- seq(0,10000,1)
+temps <- seq(0,100,1)
 nbarre <- rep(K0/N, N)
 
 solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
