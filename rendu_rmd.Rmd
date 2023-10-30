@@ -38,7 +38,7 @@ $$i = 1,2,...,N$$
 
 Avec :
 
--   $i$ le nombre de phénotype *#pas sûr à vérifier*
+-   $i$ le nombre de phénotype 
 
 -   $r$ le taux de développement de ce phénotype *#normalement c'est
     taux de croissance pour pop pas sûr du terme pour un phénotype du
@@ -82,9 +82,9 @@ fonc.a = function(x, y, sigma = sigma){
 EDO_LK <- function(t, y, paraM){
   with(as.list(paraM), { # permet d'éviter de lister les paramètres 
 
-  M = A * K
+  Mat = A * K
 
-  dndt <- r*y*(1-y%*%M) # Equation différentielle 
+  dndt <- r*y*(1-(y%*%Mat)) # Equation différentielle 
   
   return(list(dndt))
   })
@@ -151,7 +151,7 @@ besoin de résoudre cette équation différentielle.
 paraM <- list(r = r, K = K, A=A) #passage de M en paramètre pour qu'elle soit un input de EDO_LK
 
 # paramètres nécessaires à la résolution de l'équation différentielle
-temps <- seq(0,100,1)
+temps <- seq(0,10000,1)
 nbarre <- rep(K0/N, N)
 
 solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
@@ -285,7 +285,9 @@ compétition diminue donc le nombre de traits sélectionnés augmente
 jusqu'à atteintre le maximum de trait sélectionné (= le nombre de trait
 de départ).
 
-On faire la même observation en repésentant graphiquement la fonction de compétition $a(x_i,x_j)$ :
+On faire la même observation en repésentant graphiquement la fonction de
+compétition $a(x_i,x_j)$ :
+
 ```{r}
 X = seq(from = 0, to = 1, length.out = 50 )
 
@@ -294,13 +296,16 @@ lines(X,fonc.a(x = X, y = 0.5, sigma = 0.4), type = "l", col = "#F0E442")
 lines(X,fonc.a(x = X, y = 0.5, sigma = 0.8), type = "l", col = "#CC79A7")
 
 ```
-On peut voir que plus $\sigma$ est petit plus la fonction de compétition est étendu , donc plus la compétition est importante pour un interval de donné élevé.
+
+On peut voir que plus $\sigma$ est petit plus la fonction de compétition
+est étendu , donc plus la compétition est importante pour un interval de
+donné élevé.
 
 ## Introduction de Mutations et fixation des traits
 
 Une mutation est introduite dans le modèle. Une fraction de la
 population va être soumise à cette légère modification de la valeur du
-trait, avec une probabilité p. Nous avons choisi de ne faire que des
+trait, avec une probabilité $p$. Nous avons choisi de ne faire que des
 mutations "à droite", c'est à dire qu'il n'y a pas de retour en arrière
 possible, la valeur du trait mute toujours en augmentant. Il s'agit
 d'une hypothèse forte sans réelle valeur biologique, en effet,
@@ -314,26 +319,38 @@ En concervant l'hypothèse qu'à l'origine, la population comporte autant
 d'individu que de phénotypes possible, voici-ce que l'on observe.
 
 ```{r}
-
+#Initialisation des paramètres pour cette étude
 sigma = 0.5
-N <- 20 #nombre de traits
-
-M <- 100 #temps évolutif répétition du temps t. 
-p <- 0.1 #probanilité de mutation
-X <- seq(xmin, xmax, length.out = N) #valeur des traits
-
+N = 20 #nombre de traits
+M = 100 #temps évolutif répétition du temps t. 
+p = 0.1 #probanilité de mutation
+X = seq(xmin, xmax, length.out = N) #valeur des traits
 nbarre <- rep(K0/N, N) #Une même portion d'individu partagent chaque trait
 
+
+#Création des matrice K et A (elles restent fixe malgré la mutation)
+K = matrix(NA, nrow = length(X), ncol = length(X))
+A = matrix(NA, nrow = length(X), ncol = length(X))
+
+for(i in 1:length(X)){
+  for(j in 1:length(X)){
+    K[i,j] =  fonc.K(x = X[j],K0 = K0, lambda = lambda, x0 = x0)
+    A[i,j] = fonc.a(x = X[i], y = X[j], sigma = sigma)
+  }
+}
+
+# Création de la matrice qui va contenir les valeurs des phénotypes au cours du temps évolutif M
 nTmat = matrix(nrow=M, ncol=length(X))
 
-# --> mettre dans une fonction ?
 for(m in 1:M){
   solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
   nT = solution[nrow(solution),2:ncol(solution)]
+  
   for (rgtrait in 1:length(nT)){
     if (nT[rgtrait] > 0.01){
       nTmute <- nT[1:length(nT)-1]*p
-      a = runif(1,0,1) 
+      a = runif(1,0,1)
+      
       if (a>0.5){ #mutation à droite
         nT[1:length(nT)-1] = nT[1:length(nT)-1] - nTmute
         nT[2:length(nT)] = nT[2:length(nT)] + nTmute
@@ -347,25 +364,25 @@ for(m in 1:M){
   nbarre <- nT
   nTmat[m,] <- nT
 }
- 
+
 
 ## Affichage graphique
 
 colnames(nTmat) = c(1:N) # on renome pour acceder à l'indice ensuite
 
-nTmat = as.data.frame(nTmat) 
+nTmat = as.data.frame(nTmat) # on passe la matrice en tableau (obligatoire pour ggplot)
 
 temps_evol <- seq(1, M, 1)
 nTmat$time <- temps_evol # ajout du temps
 
-
+# passage des colonnes en lignes pour permettre l'affichage sous ggplot 
 nTmat_long = nTmat%>%
   pivot_longer(-time, values_to = "dens", names_to = "phenotype")
 
+
 nTmat_long$trait = X[ as.numeric(nTmat_long$phenotype)] # étiquette du trait
 
-
-## -> dans une fonction ?
+# Plots
 ggplot(nTmat_long)+
   geom_contour(aes(trait, time,  z=dens))+
   scale_fill_gradient2(low = "white" ,
@@ -388,29 +405,33 @@ Dans ce cas-ci, afin de de mieux percevoir l'effet des mutations sur la
 valeur du phénotype, nous fixons la population initiale au phénotype
 avec la plus mauvaise valeur sélective. Il s'agit d'observer la fixation
 du trait de valeur sélective maximle au cours du temps évolutif. Nous
-choisissons sigma = 2, afin d'appliquer une force pression de
+choisissons $\sigma = 2$, afin d'appliquer une forte pression de
 compétition.
 
 ```{r}
 sigma = 2
-N <- 20
-param <- c(K0, lambda, x0, xmin, xmax, N, sigma, r, epsilon)
-MatM <- matriceM(param)
-param <- list(param, MatM)
-
-M <- 100
-p <- 0.1
-X <- seq(xmin, xmax, length.out = N)
 
 z <- rep(0,N)
 z[1] <- 1
 
 nbarre <- z # cette fois, toute la population possède le trait inoptimal à l'état inital.
 
+#Création des matrice K et A (elles restent fixe malgré la mutation)
+K = matrix(NA, nrow = length(X), ncol = length(X))
+A = matrix(NA, nrow = length(X), ncol = length(X))
+
+for(i in 1:length(X)){
+  for(j in 1:length(X)){
+    K[i,j] =  fonc.K(x = X[j],K0 = K0, lambda = lambda, x0 = x0)
+    A[i,j] = fonc.a(x = X[i], y = X[j], sigma = sigma)
+  }
+}
+
+# Création de la matrice qui va contenir les valeurs des phénotypes au cours du temps évolutif M
 nTmat = matrix(nrow=M, ncol=length(X))
 
 for(m in 1:M){
-  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = param)
+  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
   nT = solution[nrow(solution),2:ncol(solution)]
   for (rgtrait in 1:length(nT)){
     if (nT[rgtrait] > 0.01){
@@ -434,64 +455,68 @@ for(m in 1:M){
  
 #### et on plot !
 
-
 colnames(nTmat) = c(1:N) # on renome pour acceder à l'indice ensuite
 
-nTmat = as.data.frame(nTmat) 
+nTmat = as.data.frame(nTmat) # on passe la matrice en tableau (obligatoire pour ggplot)
 
 temps_evol <- seq(1, M, 1)
 nTmat$time <- temps_evol # ajout du temps
 
-
+# passage des colonnes en lignes pour permettre l'affichage sous ggplot 
 nTmat_long = nTmat%>%
   pivot_longer(-time, values_to = "dens", names_to = "phenotype")
 
+
 nTmat_long$trait = X[ as.numeric(nTmat_long$phenotype)] # étiquette du trait
-
-
 
 ggplot(nTmat_long)+
   geom_contour(aes(trait, time,  z=dens))+
   scale_fill_gradient2(low = "white" ,
                        high = "red")+
-  main_theme
+  main_theme+
+  ylab("temps évolutif")
 
 ggplot(nTmat_long)+
   geom_raster(aes(trait, time,  fill=dens))+
   scale_fill_gradient2(low = "white" ,
                        high = "red")+
-  main_theme
+  main_theme+
+  ylab("temps évolutif")
 ```
 
 On voit clairement que le phénotype optimal, de valeur 0.5 est
-sélectionné au bout de 25\*t avec t = 10,000.
+sélectionné au bout de 25 pas de temps évolutif $M$ avec $t$= 10,000
+soit 25 000 pas de temps.
 
 ### Influence de la valeur de sigma
 
-Lorsque l'on mofifie cette valeur de sigma pour lever la pression de
-compétition, on constate la coexistence de deux phénotytes.
+Lorsque l'on modifie cette valeur de sigma pour lever la pression de
+compétition, on constate la coexistence de deux phénotypes.
 
 ```{r}
 
 sigma = 0.5
-N <- 20
-param <- c(K0, lambda, x0, xmin, xmax, N, sigma, r, epsilon)
-MatM <- matriceM(param)
-param <- list(param, MatM)
-
-M <- 100
-p <- 0.1
-X <- seq(xmin, xmax, length.out = N)
 
 z <- rep(0,N)
 z[1] <- 1
+nbarre <- z 
 
-nbarre <- z#rep(K0/N, N)
+#Création des matrice K et A (elles restent fixe malgré la mutation)
+K = matrix(NA, nrow = length(X), ncol = length(X))
+A = matrix(NA, nrow = length(X), ncol = length(X))
 
+for(i in 1:length(X)){
+  for(j in 1:length(X)){
+    K[i,j] =  fonc.K(x = X[j],K0 = K0, lambda = lambda, x0 = x0)
+    A[i,j] = fonc.a(x = X[i], y = X[j], sigma = sigma)
+  }
+}
+
+# Création de la matrice qui va contenir les valeurs des phénotypes au cours du temps évolutif M
 nTmat = matrix(nrow=M, ncol=length(X))
 
 for(m in 1:M){
-  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = param)
+  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
   nT = solution[nrow(solution),2:ncol(solution)]
   for (rgtrait in 1:length(nT)){
     if (nT[rgtrait] > 0.01){
