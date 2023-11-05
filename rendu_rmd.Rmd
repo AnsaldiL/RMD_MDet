@@ -38,19 +38,15 @@ $$i = 1,2,...,N$$
 
 Avec :
 
--   $i$ le nombre de phénotype 
+-   $i$ le nombre de phénotype
 
--   $r$ le taux de développement de ce phénotype *#normalement c'est
-    taux de croissance pour pop pas sûr du terme pour un phénotype du
-    coup*
+-   $r$ le taux de développement de ce phénotype
 
 -   $a(x_i,x_j)$ la fonction de compétition interspécifique entre un
-    phénotype $x_i$ et un phénotype $x_j$
-
-    L'intensité de la compétition ne dépend que de la distance entre les
-    deux phénotype d :\$ x_i-x_j\$. Si d augmente la compétition
-    augmente. Donc plus les traits sont proche plus la compétition est
-    importante
+    phénotype $x_i$ et un phénotype $x_j$. L'intensité de la compétition
+    ne dépend que de la distance entre les deux phénotype d (\$ x_i-x_j
+    \$). Si d augmente la compétition augmente. Donc plus les traits
+    sont proche plus la compétition est importante
 
 -   $K(x_i)$ la fitness d'un individu qui porte le phénotype $x_i$
 
@@ -83,7 +79,7 @@ EDO_LK <- function(t, y, paraM){
   with(as.list(paraM), { # permet d'éviter de lister les paramètres 
 
   Mat = A * K
-
+  
   dndt <- r*y*(1-(y%*%Mat)) # Equation différentielle 
   
   return(list(dndt))
@@ -320,13 +316,13 @@ d'individu que de phénotypes possible, voici-ce que l'on observe.
 
 ```{r}
 #Initialisation des paramètres pour cette étude
-sigma = 0.5
+sigma = 0.9
 N = 20 #nombre de traits
 M = 100 #temps évolutif répétition du temps t. 
 p = 0.1 #probanilité de mutation
 X = seq(xmin, xmax, length.out = N) #valeur des traits
 nbarre <- rep(K0/N, N) #Une même portion d'individu partagent chaque trait
-
+temps <- seq(0,100,1)
 
 #Création des matrice K et A (elles restent fixe malgré la mutation)
 K = matrix(NA, nrow = length(X), ncol = length(X))
@@ -338,6 +334,8 @@ for(i in 1:length(X)){
     A[i,j] = fonc.a(x = X[i], y = X[j], sigma = sigma)
   }
 }
+
+paraM = list(r = r, K=K, A=A)
 
 # Création de la matrice qui va contenir les valeurs des phénotypes au cours du temps évolutif M
 nTmat = matrix(nrow=M, ncol=length(X))
@@ -409,7 +407,7 @@ choisissons $\sigma = 2$, afin d'appliquer une forte pression de
 compétition.
 
 ```{r}
-sigma = 2
+sigma = 0.9
 
 z <- rep(0,N)
 z[1] <- 1
@@ -426,6 +424,8 @@ for(i in 1:length(X)){
     A[i,j] = fonc.a(x = X[i], y = X[j], sigma = sigma)
   }
 }
+
+paraM = list(r = r, K=K, A=A)
 
 # Création de la matrice qui va contenir les valeurs des phénotypes au cours du temps évolutif M
 nTmat = matrix(nrow=M, ncol=length(X))
@@ -495,7 +495,7 @@ compétition, on constate la coexistence de deux phénotypes.
 
 ```{r}
 
-sigma = 0.5
+sigma = 0.2
 
 z <- rep(0,N)
 z[1] <- 1
@@ -511,6 +511,8 @@ for(i in 1:length(X)){
     A[i,j] = fonc.a(x = X[i], y = X[j], sigma = sigma)
   }
 }
+
+paraM = list(r = r, K=K, A=A)
 
 # Création de la matrice qui va contenir les valeurs des phénotypes au cours du temps évolutif M
 nTmat = matrix(nrow=M, ncol=length(X))
