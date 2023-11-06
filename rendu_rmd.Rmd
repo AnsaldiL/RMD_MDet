@@ -72,7 +72,7 @@ fonc.K = function(x, K0 = K0, lambda = lambda, x0 = x0){return(
   max(0, 1/(K0-lambda*(x - x0)^2)))}  #Afin de ne pas obtenir de valeur négative, le maximum entre 0 et la valeur de K est retourné. 
 
 fonc.a = function(x, y, sigma = sigma){
-  return(exp(-(x-y)**2/2*(sigma^2)))
+  return(exp(-0.5*(x-y)^2/sigma^2))
 }
 
 EDO_LK <- function(t, y, paraM){
@@ -96,7 +96,7 @@ Voici les paramètres dont nous aurons besoin pour définir notre modèle.
 ```{r param}
 # les valeurs des paramètres sont renseignées, elles pourront être réadaptées au besoin
 
-N <- 8 #nombre de traits
+N <- 10 #nombre de traits
 
 # Pour le calcul de la fonction de compétition (a)
 sigma <- 0.2
@@ -147,10 +147,10 @@ besoin de résoudre cette équation différentielle.
 paraM <- list(r = r, K = K, A=A) #passage de M en paramètre pour qu'elle soit un input de EDO_LK
 
 # paramètres nécessaires à la résolution de l'équation différentielle
-temps <- seq(0,10000,1)
+temps <- seq(1,1000,1)
 nbarre <- rep(K0/N, N)
 
-solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
+solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM, method = "euler")
 ```
 
 L'équation différentielle ainsi définie est résolue par la fonction ode,
@@ -168,8 +168,6 @@ solution %>%
   geom_line(aes(x = time, y = value, color = Phénotype))+
   xlab ("Temps évolutif")+
   ylab ("Proportion du phénotype")+
-  scale_colour_manual(values=c("#000000", "#E69F00", "#009E73",
-                               "#0072B2", "#D55E00", "#F0E442", "#CC79A7", "purple"))+
   main_theme
 ```
 
@@ -233,7 +231,7 @@ de $\sigma$ influence l'intensité de la compétion interspécifique.
 On commence par résoudre l'EDO pour différentes valeurs de $\sigma$ :
 
 ```{r, include=FALSE}
-val_sig = seq (0.1,20,0.5) # valeur de sigma testées
+val_sig = seq (0.1,5,0.1) # valeur de sigma testées
 
 selection <- rep(NULL, length( seq (0.5,20,0.5))) #vecteur du nombre de traits sélectionnés 
 
@@ -253,9 +251,6 @@ for(i in 1:length(X)){
 
 #listes de paramètres
 paraM <- list(r = r, K = K, A = A) 
-
-# paramètres nécessaires à la résolution de l'équation différentielle
-temps <- seq(0,100,1)
 
 solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
 
@@ -316,13 +311,12 @@ d'individu que de phénotypes possible, voici-ce que l'on observe.
 
 ```{r}
 #Initialisation des paramètres pour cette étude
-sigma = 0.9
-N = 20 #nombre de traits
+sigma = 0.2
+N = 50 #nombre de traits
 M = 100 #temps évolutif répétition du temps t. 
 p = 0.1 #probanilité de mutation
 X = seq(xmin, xmax, length.out = N) #valeur des traits
 nbarre <- rep(K0/N, N) #Une même portion d'individu partagent chaque trait
-temps <- seq(0,100,1)
 
 #Création des matrice K et A (elles restent fixe malgré la mutation)
 K = matrix(NA, nrow = length(X), ncol = length(X))
@@ -340,28 +334,25 @@ paraM = list(r = r, K=K, A=A)
 # Création de la matrice qui va contenir les valeurs des phénotypes au cours du temps évolutif M
 nTmat = matrix(nrow=M, ncol=length(X))
 
+
 for(m in 1:M){
-  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
+  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM, method = "euler")
   nT = solution[nrow(solution),2:ncol(solution)]
-  
-  for (rgtrait in 1:length(nT)){
-    if (nT[rgtrait] > 0.01){
-      nTmute <- nT[1:length(nT)-1]*p
-      a = runif(1,0,1)
-      
+  a = runif(1,0,1) 
       if (a>0.5){ #mutation à droite
+        nTmute <- nT[1:length(nT)-1]*p
         nT[1:length(nT)-1] = nT[1:length(nT)-1] - nTmute
         nT[2:length(nT)] = nT[2:length(nT)] + nTmute
       }
-      #else{ #mutation à gauche
-        #nT[1:length(nT)-1] = nT[1:length(nT)-1] + nTmute
-        #nT[2:length(nT)] = nT[2:length(nT)] - nTmute
-      #}
-    }
-  }
-  nbarre <- nT
-  nTmat[m,] <- nT
+      else{ #mutation à gauche
+        nTmute <- nT[2:length(nT)]*p
+        nT[2:length(nT)] = nT[2:length(nT)] - nTmute
+        nT[1:length(nT)-1] = nT[1:length(nT)-1] + nTmute
+      }
+  nbarre <- round(nT,3)
+  nTmat[m,] <- round(nT,3)
 }
+ 
 
 
 ## Affichage graphique
@@ -382,12 +373,6 @@ nTmat_long$trait = X[ as.numeric(nTmat_long$phenotype)] # étiquette du trait
 
 # Plots
 ggplot(nTmat_long)+
-  geom_contour(aes(trait, time,  z=dens))+
-  scale_fill_gradient2(low = "white" ,
-                       high = "red")+
-  main_theme
-
-ggplot(nTmat_long)+
   geom_raster(aes(trait, time,  fill=dens))+
   scale_fill_gradient2(low = "white" ,
                        high = "red")+
@@ -407,10 +392,11 @@ choisissons $\sigma = 2$, afin d'appliquer une forte pression de
 compétition.
 
 ```{r}
-sigma = 0.9
+sigma = 0.6
 
 z <- rep(0,N)
-z[1] <- 1
+z[5] <- 1
+
 
 nbarre <- z # cette fois, toute la population possède le trait inoptimal à l'état inital.
 
@@ -431,28 +417,25 @@ paraM = list(r = r, K=K, A=A)
 nTmat = matrix(nrow=M, ncol=length(X))
 
 for(m in 1:M){
-  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM)
+  solution <- ode(y = nbarre, times = temps, func = EDO_LK, parms = paraM, method = "euler")
   nT = solution[nrow(solution),2:ncol(solution)]
-  for (rgtrait in 1:length(nT)){
-    if (nT[rgtrait] > 0.01){
-      nTmute <- nT[1:length(nT)-1]*p
-      a = runif(1,0,1) 
+  a = runif(1,0,1) 
       if (a>0.5){ #mutation à droite
+        nTmute <- nT[1:length(nT)-1]*p
         nT[1:length(nT)-1] = nT[1:length(nT)-1] - nTmute
         nT[2:length(nT)] = nT[2:length(nT)] + nTmute
       }
-      #else{ #mutation à gauche
-        #nT[1:length(nT)-1] = nT[1:length(nT)-1] + nTmute
-        #nT[2:length(nT)] = nT[2:length(nT)] - nTmute
-      #}
-    }
-  }
-  nbarre <- nT
-  nTmat[m,] <- nT
+      else{ #mutation à gauche
+        nTmute <- nT[2:length(nT)]*p
+        nT[2:length(nT)] =nT[2:length(nT)] - nTmute
+        nT[1:length(nT)-1] = nT[1:length(nT)-1] + nTmute
+      }
+  nbarre <- round(nT,3)
+  nTmat[m,] <- round(nT,3)
 }
  
 
- 
+
 #### et on plot !
 
 colnames(nTmat) = c(1:N) # on renome pour acceder à l'indice ensuite
@@ -468,13 +451,6 @@ nTmat_long = nTmat%>%
 
 
 nTmat_long$trait = X[ as.numeric(nTmat_long$phenotype)] # étiquette du trait
-
-ggplot(nTmat_long)+
-  geom_contour(aes(trait, time,  z=dens))+
-  scale_fill_gradient2(low = "white" ,
-                       high = "red")+
-  main_theme+
-  ylab("temps évolutif")
 
 ggplot(nTmat_long)+
   geom_raster(aes(trait, time,  fill=dens))+
@@ -498,7 +474,7 @@ compétition, on constate la coexistence de deux phénotypes.
 sigma = 0.2
 
 z <- rep(0,N)
-z[1] <- 1
+z[5] <- 1
 nbarre <- z 
 
 #Création des matrice K et A (elles restent fixe malgré la mutation)
@@ -555,14 +531,6 @@ nTmat_long = nTmat%>%
   pivot_longer(-time, values_to = "dens", names_to = "phenotype")
 
 nTmat_long$trait = X[ as.numeric(nTmat_long$phenotype)] # étiquette du trait
-
-
-
-ggplot(nTmat_long)+
-  geom_contour(aes(trait, time,  z=dens))+
-  scale_fill_gradient2(low = "white" ,
-                       high = "red")+
-  main_theme
 
 ggplot(nTmat_long)+
   geom_raster(aes(trait, time,  fill=dens))+
